@@ -27,7 +27,8 @@
 
         <service
             android:name=".UpdateService"
-            android:exported="false"/>
+            android:exported="false" />
+
     </application>
 
 </manifest>

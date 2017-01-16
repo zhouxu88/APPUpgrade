@@ -1,16 +1,20 @@
 package com.zx.appupgrade;
 
 import android.app.DownloadManager;
-import android.app.IntentService;
 import android.app.Notification;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
+import android.app.Service;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.Environment;
+import android.os.IBinder;
+import android.support.annotation.Nullable;
 import android.support.v4.app.NotificationCompat;
 import android.widget.RemoteViews;
 
@@ -24,15 +28,15 @@ import java.net.URL;
 
 
 /**
- * An {@link IntentService} subclass for handling asynchronous task requests in
- * a service on a separate handler thread.
- * <p>
- * TODO: Customize class - update intent actions and extra parameters.
+ * 2种方式都可以实现，下载安装
+ * 1）DownloadManager
+ * 2）自定义的下载安装任务
  */
-public class UpdateService extends IntentService {
+public class UpdateService extends Service {
 
     public static final int NOTIFICATION_ID = 100;
     private static final int REQUEST_CODE = 10; //PendingIntent中的请求码
+    //下载的新版本的apk的存放路径
     public static final String destPath = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) + File.separator + "newversion.apk";
 
 
@@ -41,44 +45,55 @@ public class UpdateService extends IntentService {
     private NotificationManager manager;
     private NotificationCompat.Builder builder;
     private RemoteViews remoteViews;
+    private BroadcastReceiver receiver;
 
-    public UpdateService() {
-        super("UpdateService");
+
+    @Nullable
+    @Override
+    public IBinder onBind(Intent intent) {
+        return null;
     }
+
+    @Override
+    public int onStartCommand(Intent intent, int flags, int startId) {
+        receiverRegist();
+        //下载apk文件
+        AppUtils.downloadApkByDownloadManager(this);
+        return Service.START_STICKY;
+    }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        //解除注册
+        unregisterReceiver(receiver);
+    }
+
+
+    //广播接收的注册
+    public void receiverRegist() {
+        receiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                //安装apk
+                AppUtils.installApk(context);
+                stopSelf(); //停止下载的Service
+            }
+        };
+        IntentFilter filter = new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE);
+        registerReceiver(receiver, filter); //注册广播
+    }
+
 
     /**
-     * 2种方式都可以实现，下载安装
-     * 1）DownloadManager
-     * 2）自定义的下载安装任务
-     * @param intent
+     * 自定义Apk下载，安装
+     *
+     * @param newVersionApkUrl 新版本的apk的下载地址
      */
-    @Override
-    protected void onHandleIntent(Intent intent) {
-        if (intent != null) {
-            //开始下载最新版本的apk文件
-            DownloadManager manager = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
-//            DownloadManager.Request request = new DownloadManager.Request(Uri.parse(MainConstant.NEW_VERSION_APP_URL));
-//            request.setMimeType("application/vnd.android.package-archive");
-//            request.setDestinationInExternalPublicDir(
-//                    Environment.DIRECTORY_DOWNLOADS, "newversionapp.apk");
-//            request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE);
-//            manager.enqueue(request);
-
-            //DownloadManager实现下载
-            DownloadManager.Request request = new DownloadManager.Request(Uri.parse(MainConstant.NEW_VERSION_APP_URL));
-            request.setTitle("文件下载")
-                    .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS,"myApk.apk")
-                    .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
-            manager.enqueue(request);
-
-            //自定义下载安装
-            //initNotification();
-           //download(MainConstant.NEW_VERSION_APP_URL);
-        }
-    }
-
-
     private void download(String newVersionApkUrl) {
+
+        initNotification(); //初始化通知
+
         BufferedInputStream bis = null;
         BufferedOutputStream bos = null;
 
@@ -172,4 +187,5 @@ public class UpdateService extends IntentService {
         //获取通知的管理器
         manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
     }
+
 }
